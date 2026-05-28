@@ -1,0 +1,95 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Information about a user in the system.",
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["editor", "collaborator"]
+        },
+        "points": {
+          "type": "integer"
+        },
+        "badges": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "createdAt": {
+          "type": "string"
+        }
+      },
+      "required": ["role", "points", "badges", "createdAt"]
+    },
+    "Article": {
+      "title": "Article",
+      "description": "A news article or insight.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "published"] },
+        "authorId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["title", "content", "status", "authorId", "createdAt"]
+    },
+    "Benefit": {
+      "title": "Benefit",
+      "description": "Items in the gamification store.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "cost": { "type": "integer" },
+        "stock": { "type": "integer" }
+      },
+      "required": ["name", "cost", "stock"]
+    },
+    "ErrorLog": {
+      "title": "Error Log",
+      "description": "System error logs.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "message": { "type": "string" },
+        "context": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["message", "timestamp"]
+    },
+    "ChatFeedback": {
+      "title": "Chat Feedback",
+      "description": "User feedback on AI chat.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "sentiment": { "type": "string" },
+        "feedback": { "type": "string" },
+        "timestamp": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profiles indexed by Firebase Auth UID."
+    },
+    "articles/{articleId}": {
+      "schema": "Article",
+      "description": "All news articles and drafts."
+    },
+    "benefits/{benefitId}": {
+      "schema": "Benefit",
+      "description": "Available benefits in the store."
+    },
+    "error_logs/{logId}": {
+      "schema": "ErrorLog",
+      "description": "Error logs recorded by the circuit breaker."
+    },
+    "feedbacks/{feedbackId}": {
+      "schema": "ChatFeedback",
+      "description": "Feedback provided for AI insights."
+    }
+  }
+}
