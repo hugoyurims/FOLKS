@@ -19,7 +19,7 @@ service cloud.firestore {
         && (request.resource.data.role == 'collaborator' || request.resource.data.role == 'editor');
       allow update: if isSignedIn() && (
         isEditor() || 
-        (request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['points', 'badges', 'role', 'readArticles', 'answeredQuizzes', 'email', 'createdAt']))
+        (request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['points', 'badges', 'readArticles', 'answeredQuizzes', 'email', 'createdAt']))
       );
     }
 
