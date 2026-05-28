@@ -1,7 +1,7 @@
 import { useAuth } from '../hooks/useAuth';
 import { Navigate } from 'react-router-dom';
 import { LogIn, Mail } from 'lucide-react';
-import { useState } from 'react';
+import React, { useState } from 'react';
 
 export function Login() {
   const { user, loginWithGoogle, loginWithEmail, registerWithEmail, loading } = useAuth();

@@ -85,15 +85,20 @@ export function News() {
   const handleSyncNews = async () => {
     setSyncingNews(true);
     try {
+      const auth = getFirebaseAuth();
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+      
       const res = await fetch('/api/fetch-external-news', { 
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: activeRole })
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({})
       });
       const articles = await res.json();
       
       const db = getDb();
-      const auth = getFirebaseAuth();
       for (const article of articles) {
          await addDoc(collection(db, 'articles'), {
            title: article.title,
@@ -130,10 +135,16 @@ export function News() {
 
       const allFeedbacks = [...errors, ...feeds];
       
+      const auth = getFirebaseAuth();
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+      
       const res = await fetch('/api/feedback-summary', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ feedbacks: allFeedbacks, role: activeRole })
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ feedbacks: allFeedbacks })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -194,10 +205,14 @@ export function News() {
       let quizData = null;
       if (!isDraft && generateQuiz) {
         try {
+          const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
           const res = await fetch('/api/generate-quiz', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content, role: activeRole })
+            headers: { 
+              'Content-Type': 'application/json',
+              ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({ content })
           });
           const js = await res.json();
           if (js.question && js.options && typeof js.answerIndex === 'number') {

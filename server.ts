@@ -2,6 +2,65 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
+import { initializeApp, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import dotenv from 'dotenv';
+import fs from 'fs';
+
+dotenv.config();
+
+const configRaw = fs.readFileSync(path.join(process.cwd(), 'firebase-applet-config.json'), 'utf8');
+const firebaseConfig = JSON.parse(configRaw);
+
+if (!getApps().length) {
+  initializeApp({ projectId: firebaseConfig.projectId });
+}
+
+async function verifyEditor(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: missing token' });
+  }
+  const token = authHeader.split('Bearer ')[1];
+  try {
+    const decoded = await getAuth().verifyIdToken(token);
+    
+    // Fetch user document via Firestore REST API to determine true role
+    const dbUrl = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${firebaseConfig.firestoreDatabaseId}/documents/users/${decoded.uid}`;
+    const docRes = await fetch(dbUrl, { headers: { Authorization: `Bearer ${token}` } });
+    
+    if (!docRes.ok) {
+      return res.status(403).json({ error: 'Forbidden: Cannot read user profile' });
+    }
+    const docData = await docRes.json();
+    const trueRole = docData.fields?.role?.stringValue;
+    
+    if (trueRole !== 'editor') {
+      return res.status(403).json({ error: 'Forbidden: Only editors can perform this action.' });
+    }
+    
+    // Valid editor
+    next();
+  } catch(e) {
+    console.error("Token verification failed", e);
+    return res.status(401).json({ error: 'Unauthorized: invalid token' });
+  }
+}
+
+async function verifyUser(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: missing token' });
+  }
+  const token = authHeader.split('Bearer ')[1];
+  try {
+    await getAuth().verifyIdToken(token);
+    next();
+  } catch(e) {
+    console.error("Token verification failed", e);
+    return res.status(401).json({ error: 'Unauthorized: invalid token' });
+  }
+}
 
 async function startServer() {
   const app = express();
@@ -10,7 +69,7 @@ async function startServer() {
   app.use(express.json());
 
   // AI Assistant Route with System Instructions to prevent Prompt Injection
-  app.post("/api/chat", async (req, res) => {
+  app.post("/api/chat", verifyUser, async (req, res) => {
     try {
       const { message } = req.body;
       if (!message) {
@@ -44,12 +103,9 @@ async function startServer() {
   });
 
   // Sentiment / Summary Generation Route
-  app.post("/api/feedback-summary", async (req, res) => {
+  app.post("/api/feedback-summary", verifyEditor, async (req, res) => {
     try {
-      const { feedbacks, role } = req.body; // Array of feedback texts
-      if (role !== "editor") {
-        return res.status(403).json({ error: "Forbidden: Acesso restrito a editores." });
-      }
+      const { feedbacks } = req.body; // Array of feedback texts
       if (!process.env.GEMINI_API_KEY) {
          throw new Error("Missing Gemini API Key");
       }
@@ -75,12 +131,9 @@ async function startServer() {
   });
 
   // Quiz Generation Route
-  app.post("/api/generate-quiz", async (req, res) => {
+  app.post("/api/generate-quiz", verifyEditor, async (req, res) => {
     try {
-      const { content, role } = req.body;
-      if (role !== "editor") {
-        return res.status(403).json({ error: "Forbidden: Acesso restrito a editores." });
-      }
+      const { content } = req.body;
       if (!process.env.GEMINI_API_KEY) {
          throw new Error("Missing Gemini API Key");
       }
@@ -109,12 +162,8 @@ async function startServer() {
   });
 
   // External News Fetcher (Simulated via Gemini)
-  app.post("/api/fetch-external-news", async (req, res) => {
+  app.post("/api/fetch-external-news", verifyEditor, async (req, res) => {
     try {
-      const { role } = req.body;
-      if (role !== "editor") {
-        return res.status(403).json({ error: "Forbidden: Acesso restrito a editores." });
-      }
       if (!process.env.GEMINI_API_KEY) {
          throw new Error("Missing Gemini API Key");
       }

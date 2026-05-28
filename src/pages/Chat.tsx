@@ -67,9 +67,15 @@ export function Chat() {
     setLoading(true);
 
     try {
+      const auth = getFirebaseAuth();
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+      
       const res = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ message: userMessage })
       });
       const data = await res.json();

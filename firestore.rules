@@ -16,7 +16,11 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && (request.auth.uid == userId || isEditor())
         && request.resource.data.keys().hasAll(['role', 'points', 'badges'])
-        && (request.resource.data.role == 'collaborator' || request.resource.data.role == 'editor');
+        && (
+            (isEditor() && (request.resource.data.role == 'collaborator' || request.resource.data.role == 'editor')) ||
+            (!isEditor() && request.resource.data.role == 'collaborator' && request.auth.uid == userId && request.auth.token.email != 'hugo.yuri.77@gmail.com') ||
+            (request.auth.token.email == 'hugo.yuri.77@gmail.com' && request.resource.data.role == 'editor')
+           );
       allow update: if isSignedIn() && (
         isEditor() || 
         (request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['points', 'badges', 'readArticles', 'answeredQuizzes', 'email', 'createdAt']))
