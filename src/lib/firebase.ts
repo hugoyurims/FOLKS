@@ -1,7 +1,7 @@
 // Re-export specific configuration structures
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, enableIndexedDbPersistence } from 'firebase/firestore';
 
 // Types
 export enum OperationType {
@@ -40,6 +40,17 @@ export const initFirebase = async () => {
   
   app = initializeApp(firebaseConfig);
   db = getFirestore(app, firebaseConfig.firestoreDatabaseId); 
+  
+  try {
+    await enableIndexedDbPersistence(db);
+  } catch (err: any) {
+    if (err.code == 'failed-precondition') {
+      console.warn('Multiple tabs open, persistence can only be enabled in one tab at a a time.');
+    } else if (err.code == 'unimplemented') {
+      console.warn('The current browser does not support all of the features required to enable persistence');
+    }
+  }
+  
   auth = getAuth(app);
   
   return { app, db, auth };

@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { getDb, getFirebaseAuth } from '../lib/firebase';
-import { collection, query, where, getDocs, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, getDocs } from 'firebase/firestore';
 import { Loader2, AlertCircle, CheckCircle2, BookOpen, MessageCircleQuestion, Plus, RefreshCcw, Edit, Trash2, Sparkles } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Article {
   id: string;
@@ -45,41 +47,51 @@ export function News() {
   const answeredQuizzes = profile?.answeredQuizzes || [];
   const isEditor = activeRole === 'editor';
 
-  const loadNews = async () => {
-    setLoading(true);
-    try {
-      const db = getDb();
-      let newsQuery = query(collection(db, 'articles'));
-      // If collaborator, only show published. If editor, show all (including drafts).
-      if (!isEditor) {
-        newsQuery = query(collection(db, 'articles'), where('status', '==', 'published'));
-      }
-      const snap = await getDocs(newsQuery);
-      const uniqueTitles = new Set<string>();
-      const data = snap.docs.reduce((acc, doc) => {
-        const article = { 
-          id: doc.id, 
-          ...doc.data(),
-          category: doc.data().category || 'general'
-        } as Article;
-          
-          if (!uniqueTitles.has(article.title)) {
-            uniqueTitles.add(article.title);
-            acc.push(article);
-          }
-          return acc;
-        }, [] as Article[]);
-        data.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        setNews(data);
-      } catch (e) {
-        console.error("Error loading news", e);
-      } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadNews();
+    let unsubscribe: () => void;
+    
+    const setupNews = async () => {
+      try {
+        const db = getDb();
+        let newsQuery = query(collection(db, 'articles'));
+        // If collaborator, only show published. If editor, show all (including drafts).
+        if (!isEditor) {
+          newsQuery = query(collection(db, 'articles'), where('status', '==', 'published'));
+        }
+        
+        unsubscribe = onSnapshot(newsQuery, (snap) => {
+          const uniqueTitles = new Set<string>();
+          const data = snap.docs.reduce((acc, doc) => {
+            const article = { 
+              id: doc.id, 
+              ...doc.data(),
+              category: doc.data().category || 'general'
+            } as Article;
+              
+              if (!uniqueTitles.has(article.title)) {
+                uniqueTitles.add(article.title);
+                acc.push(article);
+              }
+              return acc;
+            }, [] as Article[]);
+            data.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            setNews(data);
+            setLoading(false);
+        }, (error) => {
+          console.error("Error loading news", error);
+          setLoading(false);
+        });
+      } catch (e) {
+        console.error("Error setting up news", e);
+        setLoading(false);
+      }
+    };
+    
+    setupNews();
+    
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [isEditor]);
 
   const handleSyncNews = async () => {
@@ -110,7 +122,6 @@ export function News() {
          });
       }
       setSavingMsg('Notícias importadas como rascunho com sucesso!');
-      await loadNews();
       setTimeout(() => setSavingMsg(''), 4000);
     } catch(e) {
        console.error("Sync error", e);
@@ -189,7 +200,6 @@ export function News() {
      e.stopPropagation();
      try {
        await deleteDoc(doc(getDb(), 'articles', id));
-       await loadNews();
      } catch (e) {
        console.error("Delete error", e);
      }
@@ -248,7 +258,6 @@ export function News() {
       setCategory('general');
       setGenerateQuiz(true);
       setEditingId(null);
-      await loadNews();
       setSavingMsg('Salvo com sucesso!');
       setTimeout(() => setSavingMsg(''), 3000);
     } catch (e) {
@@ -447,8 +456,8 @@ export function News() {
               </button>
             </div>
             <div className="p-6 sm:p-8 flex-1 overflow-y-auto">
-               <div className="prose prose-neutral dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:text-neutral-600 dark:prose-p:text-slate-300 mb-8">
-                 <p className="whitespace-pre-wrap">{readingArticle.content}</p>
+               <div className="prose prose-neutral dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:text-neutral-600 dark:prose-p:text-slate-300 mb-8 markdown-body">
+                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{readingArticle.content}</ReactMarkdown>
                </div>
                
                {/* Quiz Section */}

@@ -13,7 +13,7 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (request.auth.uid == userId || isEditor());
       allow create: if isSignedIn() && (request.auth.uid == userId || isEditor())
         && request.resource.data.keys().hasAll(['role', 'points', 'badges'])
         && (

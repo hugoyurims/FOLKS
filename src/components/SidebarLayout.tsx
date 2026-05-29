@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
-import { Newspaper, Trophy, MessageSquare, Menu, LogOut, Gift, Sun, Moon, Briefcase, Eye, Users } from 'lucide-react';
+import { Newspaper, Trophy, MessageSquare, Menu, LogOut, Gift, Sun, Moon, Briefcase, Eye, Users, BarChart3, Medal } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Link, Outlet, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 
 export function SidebarLayout() {
   const [collapsed, setCollapsed] = useState(false);
@@ -12,17 +13,21 @@ export function SidebarLayout() {
   const location = useLocation();
 
   const isEditor = activeRole === 'editor';
-  const isTrueEditor = profile?.role === 'editor';
+  const canToggleRole = profile?.email === 'hugo.yuri.77@gmail.com' || profile?.email === 'teste@folks.com';
 
   const navItems = [
     { name: 'Notícias', path: '/', icon: <Newspaper size={20} /> },
     { name: 'Bem-estar IA', path: '/chat', icon: <MessageSquare size={20} /> },
-    { name: 'Gamificação', path: '/gamification', icon: <Trophy size={20} /> },
-    { name: 'Loja de Benefícios', path: '/store', icon: <Gift size={20} /> },
+    { name: 'Evolução', path: '/gamification', icon: <Trophy size={20} /> },
+    { name: 'Ranking', path: '/ranking', icon: <Medal size={20} /> },
+    { name: 'Loja', path: '/store', icon: <Gift size={20} /> },
   ];
 
-  if (isTrueEditor) {
+  if (isEditor) {
+    navItems.push({ name: 'Dashboard', path: '/dashboard', icon: <BarChart3 size={20} /> });
     navItems.push({ name: 'Usuários', path: '/users', icon: <Users size={20} /> });
+  } else {
+    navItems.push({ name: 'Meu Perfil', path: '/users', icon: <Users size={20} /> });
   }
 
   const toggleRole = () => {
@@ -91,7 +96,7 @@ export function SidebarLayout() {
             {!collapsed && <span className="font-medium text-sm">Tema {theme === 'dark' ? 'Claro' : 'Escuro'}</span>}
           </button>
 
-          {isTrueEditor && (
+          {canToggleRole && (
              <button 
              onClick={toggleRole}
              className={cn("flex items-center gap-3 px-3 py-2 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 rounded-lg transition-colors w-full", collapsed && "justify-center")}
@@ -125,8 +130,19 @@ export function SidebarLayout() {
         </div>
       </aside>
 
-      <main className="flex-1 h-full overflow-hidden flex flex-col relative">
-        <Outlet />
+      <main className="flex-1 h-full overflow-hidden flex flex-col relative bg-neutral-50/50 dark:bg-slate-950/50">
+        <AnimatePresence mode="wait">
+          <motion.div 
+            key={location.pathname}
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.2 }}
+            className="h-full w-full overflow-auto"
+          >
+            <Outlet />
+          </motion.div>
+        </AnimatePresence>
       </main>
     </div>
   );

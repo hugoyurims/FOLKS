@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { getDb, getSecondaryAuth } from '../lib/firebase';
+import { getDb, getSecondaryAuth, getFirebaseAuth } from '../lib/firebase';
 import { collection, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signOut, updatePassword } from 'firebase/auth';
 import { ShieldCheck, User, UserPlus } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Navigate } from 'react-router-dom';
@@ -15,13 +15,15 @@ interface UserItem {
 }
 
 export function Users() {
-  const { profile } = useAuth();
+  const { profile, activeRole } = useAuth();
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
   
   const [newEmail, setNewEmail] = useState('');
   const [newRole, setNewRole] = useState<'editor' | 'collaborator'>('collaborator');
   const [creating, setCreating] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const loadUsers = async () => {
     try {
@@ -46,9 +48,10 @@ export function Users() {
   };
 
   useEffect(() => {
-    if (profile?.role !== 'editor') return; // Only true editors can load this
-    loadUsers();
-  }, [profile]);
+    if (activeRole === 'editor') {
+      loadUsers();
+    }
+  }, [activeRole]);
 
   const toggleRole = async (userId: string, currentRole: string) => {
     if (!confirm(`Deseja alterar o perfil deste usuário?`)) return;
@@ -104,8 +107,82 @@ export function Users() {
     }
   };
 
-  if (profile?.role !== 'editor') {
-    return <Navigate to="/" />; // Redirect if not true editor
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword || newPassword.length < 6) {
+      alert("A senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      const auth = getFirebaseAuth();
+      if (auth.currentUser) {
+        await updatePassword(auth.currentUser, newPassword);
+        alert("Senha atualizada com sucesso!");
+        setNewPassword('');
+      } else {
+        alert("Usuário não autenticado.");
+      }
+    } catch (e: any) {
+      console.error(e);
+      if (e.code === 'auth/requires-recent-login') {
+         alert("Por questões de segurança, você precisa fazer login novamente para alterar a senha.");
+         signOut(getFirebaseAuth());
+      } else {
+         alert("Erro ao alterar senha: " + e.message);
+      }
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  if (activeRole !== 'editor') {
+    return (
+      <div className="flex flex-col h-full bg-neutral-50 dark:bg-[#060B14]">
+        <header className="px-6 py-5 border-b border-neutral-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm z-10 sticky top-0 flex flex-col justify-between">
+          <div>
+            <h1 className="text-[22px] font-bold font-display tracking-tight text-neutral-900 dark:text-white">Meu Perfil</h1>
+            <p className="text-[13px] text-neutral-500 dark:text-slate-400 mt-1">Veja seus detalhes e configure sua conta.</p>
+          </div>
+        </header>
+        <div className="p-6 flex-1 overflow-y-auto space-y-8">
+          <div className="max-w-xl mx-auto bg-white dark:bg-[#0B1221] border border-neutral-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
+            <div className="p-6 flex items-center gap-4 border-b border-neutral-200 dark:border-slate-800">
+               <div className="w-16 h-16 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 flex items-center justify-center font-bold text-2xl shrink-0">
+                  <User size={32} />
+               </div>
+               <div>
+                  <h2 className="text-[18px] font-bold text-neutral-900 dark:text-white">{profile?.email}</h2>
+                  <div className="text-[14px] text-neutral-500 dark:text-slate-400 font-mono mt-1">
+                     Nível: <span className="text-blue-500 font-bold uppercase tracking-wider">{profile?.role}</span>
+                  </div>
+               </div>
+            </div>
+            
+            <div className="p-6">
+               <h3 className="text-[15px] font-bold mb-4 dark:text-white">Alterar Senha</h3>
+               <form onSubmit={handleChangePassword} className="flex flex-col gap-4">
+                  <input 
+                    type="password" 
+                    placeholder="Nova senha (min. 6 caracteres)" 
+                    required
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    className="w-full bg-transparent border border-neutral-200 dark:border-slate-700 px-4 py-2.5 rounded-xl text-[14px] outline-none focus:border-blue-500 dark:text-white"
+                  />
+                  <button
+                    type="submit"
+                    disabled={changingPassword}
+                    className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-[13px] tracking-wide transition-colors disabled:opacity-50"
+                  >
+                    {changingPassword ? 'Atualizando...' : 'Atualizar Senha'}
+                  </button>
+               </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

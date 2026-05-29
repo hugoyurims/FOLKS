@@ -1,7 +1,8 @@
-import { useEffect, useState, createContext, useContext } from 'react';
+import React, { useEffect, useState, createContext, useContext } from 'react';
 import { initFirebase } from '../lib/firebase';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, User, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, collection, getDocs, onSnapshot } from 'firebase/firestore';
+import toast from 'react-hot-toast';
 
 interface UserProfile {
   email?: string;
@@ -113,6 +114,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           points: newPoints
         });
         setProfile({ ...profile, answeredQuizzes: newQuizzes, points: newPoints });
+        toast.success('+50 InsightCoins pelo Quiz!', {
+          icon: '🏆',
+          style: {
+            borderRadius: '10px',
+            background: '#1e293b',
+            color: '#fff',
+          },
+        });
       } catch (e) {
         console.error("Failed to mark quiz", e);
       }
@@ -131,6 +140,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           points: newPoints
         });
         setProfile({ ...profile, readArticles: newRead, points: newPoints });
+        toast.success('+10 InsightCoins pela Leitura!', {
+          icon: '📖',
+          style: {
+            borderRadius: '10px',
+            background: '#1e293b',
+            color: '#fff',
+          },
+        });
       } catch (e) {
         console.error("Failed to mark as read", e);
       }

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, AlertTriangle, ShieldCheck, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getDb, getFirebaseAuth } from '../lib/firebase';

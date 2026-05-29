@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { getDb, getFirebaseAuth } from '../lib/firebase';
-import { collection, getDocs, doc, runTransaction, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, runTransaction, addDoc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
 import { Gift, Lock, Loader2, CheckCircle2, ShoppingBag, Plus, Edit, Trash2 } from 'lucide-react';
 import { cn } from '../lib/utils';
+// @ts-ignore
 import folksMugImage from '../assets/images/folks_mug_1779894900152.png';
+// @ts-ignore
 import ifoodVoucherImage from '../assets/images/ifood_voucher_1779894329011.png';
+// @ts-ignore
 import dayOffImage from '../assets/images/day_off_1779894871806.png';
 
 interface Benefit {
@@ -34,45 +37,54 @@ export function Store() {
   const [imageUrl, setImageUrl] = useState('');
   const [savingMsg, setSavingMsg] = useState('');
 
-  const loadBenefits = async () => {
-    setLoading(true);
-    try {
-      const db = getDb();
-      const snap = await getDocs(collection(db, 'benefits'));
-        const uniqueMap = new Map<string, Benefit>();
-        
-        snap.docs.forEach(doc => {
-          let b = { id: doc.id, ...doc.data() } as Benefit;
+  useEffect(() => {
+    let unsubscribe: () => void;
+    
+    const setupBenefits = async () => {
+      try {
+        const db = getDb();
+        unsubscribe = onSnapshot(collection(db, 'benefits'), (snap) => {
+          const uniqueMap = new Map<string, Benefit>();
           
-          if (b.name.includes("Day Off Acadêmico") || b.name.includes("Day Off")) {
-            b.name = "Day Off";
-            b.imageUrl = dayOffImage;
-          }
-          if (b.name.includes("Caneca")) {
-            b.name = "Caneca FOLKS";
-            b.imageUrl = folksMugImage;
-          }
-          if (b.name.includes("iFood")) {
-            b.imageUrl = ifoodVoucherImage;
-          }
+          snap.docs.forEach(doc => {
+            let b = { id: doc.id, ...doc.data() } as Benefit;
+            
+            if (b.name.includes("Day Off Acadêmico") || b.name.includes("Day Off")) {
+              b.name = "Day Off";
+              b.imageUrl = dayOffImage;
+            }
+            if (b.name.includes("Caneca")) {
+              b.name = "Caneca FOLKS";
+              b.imageUrl = folksMugImage;
+            }
+            if (b.name.includes("iFood")) {
+              b.imageUrl = ifoodVoucherImage;
+            }
 
-          if (!uniqueMap.has(b.name)) {
-             uniqueMap.set(b.name, b);
-          }
+            if (!uniqueMap.has(b.name)) {
+               uniqueMap.set(b.name, b);
+            }
+          });
+          const data = Array.from(uniqueMap.values());
+          // Sort by cost ascending
+          data.sort((a,b) => a.cost - b.cost);
+          setBenefits(data);
+          setLoading(false);
+        }, (error) => {
+           console.error("Error loading benefits", error);
+           setLoading(false);
         });
-        const data = Array.from(uniqueMap.values());
-        // Sort by cost ascending
-        data.sort((a,b) => a.cost - b.cost);
-        setBenefits(data);
       } catch (e) {
-        console.error("Error loading benefits", e);
-      } finally {
+        console.error("Error setting up benefits", e);
         setLoading(false);
       }
-  };
-
-  useEffect(() => {
-    loadBenefits();
+    };
+    
+    setupBenefits();
+    
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, []);
 
   const handleRedeem = async (b: Benefit) => {
@@ -129,7 +141,6 @@ export function Store() {
     if (e) e.stopPropagation();
     try {
       await deleteDoc(doc(getDb(), 'benefits', id));
-      await loadBenefits();
     } catch(e) {
       console.error(e);
     }
@@ -148,7 +159,6 @@ export function Store() {
       }
       setIsModalOpen(false);
       setName(''); setCost(100); setStock(10); setImageUrl(''); setEditingId(null);
-      await loadBenefits();
       setSavingMsg('Salvo com sucesso!');
       setTimeout(()=>setSavingMsg(''), 3000);
     } catch(e) {
