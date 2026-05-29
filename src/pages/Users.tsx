@@ -26,9 +26,11 @@ export function Users() {
   const [changingPassword, setChangingPassword] = useState(false);
 
   const loadUsers = async () => {
+    setLoading(true);
     try {
       const { db } = await initFirebase();
       const snap = await getDocs(collection(db, 'users'));
+      
       const loaded = snap.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -48,9 +50,15 @@ export function Users() {
   };
 
   useEffect(() => {
+    let isMounted = true;
+    
     if (activeRole === 'editor') {
-      loadUsers();
+      loadUsers().catch(console.error);
     }
+    
+    return () => {
+      isMounted = false;
+    };
   }, [activeRole]);
 
   const toggleRole = async (userId: string, currentRole: string) => {

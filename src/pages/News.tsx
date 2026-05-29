@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react';
-import { initFirebase, getIdToken } from '../lib/firebase';
-import { collection, query, where, getDocs, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import React, { useEffect, useState } from 'react';
+import { initFirebase } from '../lib/firebase';
+import { collection, query, where, addDoc, updateDoc, doc, deleteDoc, getDocs } from 'firebase/firestore';
 import { Loader2, AlertCircle, CheckCircle2, BookOpen, MessageCircleQuestion, Plus, RefreshCcw, Edit, Trash2, Sparkles } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
-import { getFromCache, setInCache } from '../lib/cache';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { getFromCache, setInCache } from '../lib/cache';
 
 interface Article {
   id: string;
@@ -49,15 +49,14 @@ export function News() {
   const isEditor = activeRole === 'editor';
 
   const loadNews = async () => {
-    const cached = getFromCache<Article[]>('news');
+    const cached = getFromCache('news');
     if (cached) {
       setNews(cached);
-    }
-
-    if (!cached) {
+      setLoading(false);
+    } else {
       setLoading(true);
     }
-
+    
     try {
       const { db } = await initFirebase();
       let newsQuery = query(collection(db, 'articles'));
@@ -69,23 +68,24 @@ export function News() {
       const snap = await getDocs(newsQuery);
       const uniqueTitles = new Set<string>();
       const data = snap.docs.reduce((acc, doc) => {
-        const article = {
-          id: doc.id,
+        const article = { 
+          id: doc.id, 
           ...doc.data(),
           category: doc.data().category || 'general'
         } as Article;
-
+        
         if (!uniqueTitles.has(article.title)) {
           uniqueTitles.add(article.title);
           acc.push(article);
         }
         return acc;
       }, [] as Article[]);
-      data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      
+      data.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setNews(data);
       setInCache('news', data);
     } catch (e) {
-      console.error('Error loading news', e);
+      console.error("Error loading news", e);
     } finally {
       setLoading(false);
     }
@@ -98,17 +98,19 @@ export function News() {
   const handleSyncNews = async () => {
     setSyncingNews(true);
     try {
-      const { db, auth } = await initFirebase();
-      const idToken = await getIdToken();
-      if (!idToken) throw new Error('Usuário não autenticado');
-
-      const res = await fetch('/api/fetch-external-news', {
+      const { auth, db } = await initFirebase();
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+      
+      const res = await fetch('/api/fetch-external-news', { 
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({})
       });
       const articles = await res.json();
-
+      
       for (const article of articles) {
          await addDoc(collection(db, 'articles'), {
            title: article.title,
@@ -144,12 +146,14 @@ export function News() {
 
       const allFeedbacks = [...errors, ...feeds];
       
-      const idToken = await getIdToken();
-      if (!idToken) throw new Error('Usuário não autenticado');
-
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+      
       const res = await fetch('/api/feedback-summary', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ feedbacks: allFeedbacks })
       });
       const data = await res.json();
@@ -210,12 +214,13 @@ export function News() {
       let quizData = null;
       if (!isDraft && generateQuiz) {
         try {
-          const idToken = await getIdToken();
-          if (!idToken) throw new Error('Usuário não autenticado');
-
+          const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
           const res = await fetch('/api/generate-quiz', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+            headers: { 
+              'Content-Type': 'application/json',
+              ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            },
             body: JSON.stringify({ content })
           });
           const js = await res.json();

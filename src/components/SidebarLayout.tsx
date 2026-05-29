@@ -4,7 +4,6 @@ import { useTheme } from '../hooks/useTheme';
 import { Newspaper, Trophy, MessageSquare, Menu, LogOut, Gift, Sun, Moon, Briefcase, Eye, Users, BarChart3, Medal } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion';
 
 export function SidebarLayout() {
   const [collapsed, setCollapsed] = useState(false);
@@ -129,19 +128,8 @@ export function SidebarLayout() {
         </div>
       </aside>
 
-      <main className="flex-1 h-full overflow-hidden flex flex-col relative bg-neutral-50/50 dark:bg-slate-950/50">
-        <AnimatePresence mode="wait">
-          <motion.div 
-            key={location.pathname}
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.98 }}
-            transition={{ duration: 0.2 }}
-            className="h-full w-full overflow-auto"
-          >
-            <Outlet />
-          </motion.div>
-        </AnimatePresence>
+      <main className="flex-1 h-full overflow-y-auto relative bg-neutral-50/50 dark:bg-slate-950/50 animate-in fade-in duration-300">
+        <Outlet />
       </main>
     </div>
   );

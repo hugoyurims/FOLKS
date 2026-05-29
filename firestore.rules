@@ -23,10 +23,7 @@ service cloud.firestore {
            );
       allow update: if isSignedIn() && (
         isEditor() || 
-        (request.auth.uid == userId &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['points', 'badges', 'readArticles', 'answeredQuizzes', 'email', 'createdAt'])
-          && request.resource.data.role == resource.data.role
-        )
+        (request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['points', 'badges', 'readArticles', 'answeredQuizzes', 'email', 'createdAt']))
       );
     }
 

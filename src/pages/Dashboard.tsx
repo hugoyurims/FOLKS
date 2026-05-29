@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { initFirebase } from '../lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { Users, FileText, Gift, Award, TrendingUp } from 'lucide-react';
-import { motion } from 'framer-motion';
 
 export function Dashboard() {
   const [stats, setStats] = useState({
@@ -48,12 +47,7 @@ export function Dashboard() {
   }, []);
 
   return (
-    <motion.div 
-       initial={{ opacity: 0, y: 20 }}
-       animate={{ opacity: 1, y: 0 }}
-       exit={{ opacity: 0, y: -20 }}
-       className="p-6 md:p-8 max-w-5xl mx-auto w-full"
-    >
+    <div className="p-6 md:p-8 max-w-5xl mx-auto w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
       <header className="mb-8">
         <h1 className="text-3xl font-display font-bold text-neutral-900 dark:text-white mb-2">Painel Administrativo</h1>
         <p className="text-neutral-500 dark:text-slate-400">Visão geral da plataforma e engajamento dos colaboradores.</p>
@@ -99,6 +93,6 @@ export function Dashboard() {
            </div>
         </div>
       )}
-    </motion.div>
+    </div>
   )
 }

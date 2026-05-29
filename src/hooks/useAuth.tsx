@@ -160,14 +160,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initFirebase().then(({ auth, db }) => {
       unsubscribeAuth = onAuthStateChanged(auth, async (u) => {
         setUser(u);
-
+        
         if (u) {
           try {
             const userRef = doc(db, 'users', u.uid);
             const userSnap = await getDoc(userRef);
-            const isTargetEmail = u.email === 'hugo.yuri.77@gmail.com';
             let p: UserProfile;
-
+            
+            const isTargetEmail = u.email === 'hugo.yuri.77@gmail.com';
+            
             if (!userSnap.exists()) {
               p = {
                 email: u.email || undefined,
@@ -181,31 +182,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             } else {
               p = userSnap.data() as UserProfile;
               let needsUpdate = false;
-
+              
               if (!p.email && u.email) {
                 p.email = u.email;
                 needsUpdate = true;
               }
-
+              
               if (isTargetEmail && (p.role !== 'editor' || p.points === 0)) {
                 p = { ...p, role: 'editor', points: Math.max(p.points || 0, 1250), badges: Array.from(new Set([...(p.badges || []), '🛡️ Leitor Assíduo', '📖 Mestre do Foco'])) };
                 needsUpdate = true;
               }
-
+              
               if (needsUpdate) {
                 await updateDoc(userRef, p as any);
               }
             }
-
             setProfile(p);
-            setActiveRole(p.role);
-
+            setActiveRole(p.role); // Default to their real role
+            
+            setLoading(false);
+            
             if (isTargetEmail) {
-              seedDatabase(db, u.uid).catch((e) => console.error('Seed database error', e));
+              seedDatabase(db, u.uid).catch(e => console.error("Seed error:", e));
             }
           } catch (e) {
-            console.error('Error fetching/updating profile', e);
-          } finally {
+            console.error("Error fetching/updating profile", e);
             setLoading(false);
           }
         } else {
@@ -214,9 +215,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setLoading(false);
         }
       });
+    }).catch(e => {
+      console.error("Firebase Auth Init Error:", e);
+      setLoading(false);
     });
 
-    return () => unsubscribeAuth();
+    return () => {
+      unsubscribeAuth();
+    };
   }, []);
 
   const loginWithGoogle = async () => {

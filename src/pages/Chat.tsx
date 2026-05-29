@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, AlertTriangle, ShieldCheck, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { initFirebase, getIdToken } from '../lib/firebase';
+import { initFirebase } from '../lib/firebase';
 import { collection, addDoc } from 'firebase/firestore';
 
 export function Chat() {
@@ -65,12 +65,15 @@ export function Chat() {
     setLoading(true);
 
     try {
-      const idToken = await getIdToken();
-      if (!idToken) throw new Error('Usuário não autenticado');
-
+      const { auth } = await initFirebase();
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+      
       const res = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ message: userMessage })
       });
       const data = await res.json();

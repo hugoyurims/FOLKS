@@ -4,12 +4,13 @@ import { collection, doc, runTransaction, addDoc, updateDoc, deleteDoc, getDocs 
 import { useAuth } from '../hooks/useAuth';
 import { Gift, Lock, Loader2, CheckCircle2, ShoppingBag, Plus, Edit, Trash2 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { getFromCache, setInCache } from '../lib/cache';
+// @ts-ignore
 import folksMugImage from '../assets/images/folks_mug_1779894900152.png';
 // @ts-ignore
 import ifoodVoucherImage from '../assets/images/ifood_voucher_1779894329011.png';
 // @ts-ignore
 import dayOffImage from '../assets/images/day_off_1779894871806.png';
+import { getFromCache, setInCache } from '../lib/cache';
 
 interface Benefit {
   id: string;
@@ -38,47 +39,46 @@ export function Store() {
   const [savingMsg, setSavingMsg] = useState('');
 
   const loadBenefits = async () => {
-    const cached = getFromCache<Benefit[]>('benefits');
+    const cached = getFromCache('benefits');
     if (cached) {
       setBenefits(cached);
-    }
-
-    if (!cached) {
+      setLoading(false);
+    } else {
       setLoading(true);
     }
-
+    
     try {
       const { db } = await initFirebase();
-
+      
       const snap = await getDocs(collection(db, 'benefits'));
       const uniqueMap = new Map<string, Benefit>();
-
-      snap.docs.forEach((doc) => {
+      
+      snap.docs.forEach(doc => {
         let b = { id: doc.id, ...doc.data() } as Benefit;
+        
+        const bName = b.name || '';
 
-        if (b.name.includes('Day Off Acadêmico') || b.name.includes('Day Off')) {
-          b.name = 'Day Off';
+        if (bName.includes("Day Off Acadêmico") || bName.includes("Day Off")) {
+          b.name = "Day Off";
           b.imageUrl = dayOffImage;
-        }
-        if (b.name.includes('Caneca')) {
-          b.name = 'Caneca FOLKS';
+        } else if (bName.includes("Caneca")) {
+          b.name = "Caneca FOLKS";
           b.imageUrl = folksMugImage;
-        }
-        if (b.name.includes('iFood')) {
+        } else if (bName.includes("iFood")) {
           b.imageUrl = ifoodVoucherImage;
         }
 
-        if (!uniqueMap.has(b.name)) {
-          uniqueMap.set(b.name, b);
+        if (b.name && !uniqueMap.has(b.name)) {
+           uniqueMap.set(b.name, b);
         }
       });
       const data = Array.from(uniqueMap.values());
       // Sort by cost ascending
-      data.sort((a, b) => a.cost - b.cost);
+      data.sort((a,b) => a.cost - b.cost);
       setBenefits(data);
       setInCache('benefits', data);
     } catch (e) {
-      console.error('Error loading benefits', e);
+      console.error("Error loading benefits", e);
     } finally {
       setLoading(false);
     }
