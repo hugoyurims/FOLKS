@@ -19,7 +19,6 @@ export function SidebarLayout() {
     { name: 'Notícias', path: '/', icon: <Newspaper size={20} /> },
     { name: 'Bem-estar IA', path: '/chat', icon: <MessageSquare size={20} /> },
     { name: 'Evolução', path: '/gamification', icon: <Trophy size={20} /> },
-    { name: 'Ranking', path: '/ranking', icon: <Medal size={20} /> },
     { name: 'Loja', path: '/store', icon: <Gift size={20} /> },
   ];
 

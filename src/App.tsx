@@ -12,7 +12,6 @@ const Chat = React.lazy(() => import('./pages/Chat').then(m => ({ default: m.Cha
 const Gamification = React.lazy(() => import('./pages/Gamification').then(m => ({ default: m.Gamification })));
 const Store = React.lazy(() => import('./pages/Store').then(m => ({ default: m.Store })));
 const Users = React.lazy(() => import('./pages/Users').then(m => ({ default: m.Users })));
-const Ranking = React.lazy(() => import('./pages/Ranking').then(m => ({ default: m.Ranking })));
 const Dashboard = React.lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
 
 function App() {
@@ -35,7 +34,6 @@ function App() {
               <Route path="/gamification" element={<Gamification />} />
               <Route path="/store" element={<Store />} />
               <Route path="/users" element={<Users />} />
-              <Route path="/ranking" element={<Ranking />} />
               <Route path="/dashboard" element={<Dashboard />} />
             </Route>
           </Routes>

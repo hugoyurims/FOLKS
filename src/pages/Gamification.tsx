@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { Target, Award, Flame, BookOpen, MessageCircleQuestion, ChevronRight, Trophy } from 'lucide-react';
+import { Target, Award, Flame, BookOpen, MessageCircleQuestion, ChevronRight, Trophy, Medal, Star } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Link } from 'react-router-dom';
 import { initFirebase } from '../lib/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { motion, AnimatePresence } from 'motion/react';
+import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { motion, AnimatePresence } from 'framer-motion';
 import Confetti from 'react-confetti';
+import { getFromCache, setInCache } from '../lib/cache';
 
 const LEVELS = [
   { id: 1, name: "Novato", req: 0, color: "text-slate-400", bg: "bg-slate-400/20", border: "border-slate-400/30" },
@@ -18,10 +19,17 @@ const LEVELS = [
 export function Gamification() {
   const { profile } = useAuth();
   
+  const [activeTab, setActiveTab] = useState<'conquests' | 'ranking'>('conquests');
+
+  // Gamification state
   const [pendingNews, setPendingNews] = useState<any[]>([]);
   const [pendingQuizzes, setPendingQuizzes] = useState<any[]>([]);
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [prevLevelId, setPrevLevelId] = useState<number | null>(null);
+
+  // Ranking state
+  const [users, setUsers] = useState<any[]>([]);
+  const [loadingRanking, setLoadingRanking] = useState(true);
 
   const points = profile?.points || 0;
 
@@ -37,16 +45,15 @@ export function Gamification() {
 
   // Level up detection
   useEffect(() => {
-    // We only trigger level up if prevLevelId is set AND the new level is higher
     if (prevLevelId !== null && currentLevel.id > prevLevelId) {
       setShowLevelUp(true);
-      const timer = setTimeout(() => setShowLevelUp(false), 5000); // hide after 5s
+      const timer = setTimeout(() => setShowLevelUp(false), 5000);
       return () => clearTimeout(timer);
     }
-    // Update the ref to current level after checking
     setPrevLevelId(currentLevel.id);
   }, [currentLevel.id, prevLevelId]);
 
+  // Load Gamification Data
   useEffect(() => {
     let isMounted = true;
     async function loadPending() {
@@ -82,6 +89,47 @@ export function Gamification() {
     };
   }, [profile]);
 
+  // Load Ranking Data
+  useEffect(() => {
+    if (activeTab !== 'ranking') return;
+    
+    let isMounted = true;
+    const loadRanking = async () => {
+      const cached = getFromCache('ranking');
+      if (cached) {
+        setUsers(cached);
+        setLoadingRanking(false);
+      } else {
+        setLoadingRanking(true);
+      }
+      
+      try {
+        const { db } = await initFirebase();
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, orderBy('points', 'desc'), limit(50));
+        
+        const snapshot = await getDocs(q);
+        if (!isMounted) return;
+
+        const rankingData = snapshot.docs.map((doc, index) => ({
+          id: doc.id,
+          position: index + 1,
+          ...doc.data()
+        }));
+        
+        setUsers(rankingData);
+        setInCache('ranking', rankingData);
+        setLoadingRanking(false);
+      } catch (e) {
+        console.error("Error setting up ranking", e);
+        if (isMounted) setLoadingRanking(false);
+      }
+    };
+
+    loadRanking();
+    return () => { isMounted = false; };
+  }, [activeTab]);
+
   return (
     <div className="p-6 md:p-8 lg:max-w-5xl w-full mx-auto relative">
       {/* Confetti overlay for Level Up */}
@@ -110,125 +158,252 @@ export function Gamification() {
         </div>
       )}
 
-      <header className="mb-10">
-        <h1 className="text-3xl font-display font-bold text-neutral-900 dark:text-white tracking-tight">Evolução & Conquistas</h1>
-        <p className="text-neutral-500 dark:text-slate-400 text-[15px] mt-2">Continue evoluindo na sua jornada de bem-estar corporativo.</p>
+      <header className="mb-8">
+        <h1 className="text-3xl font-display font-bold text-neutral-900 dark:text-white tracking-tight leading-tight">
+          {activeTab === 'conquests' ? 'Evolução & Conquistas' : 'Ranking Global'}
+        </h1>
+        <p className="text-neutral-500 dark:text-slate-400 text-[15px] mt-2">
+          {activeTab === 'conquests' ? 'Continue evoluindo na sua jornada de bem-estar.' : 'Os maiores talentos e engajadores da plataforma.'}
+        </p>
       </header>
 
-      <div className="grid md:grid-cols-3 gap-6 mb-10">
-        <motion.div 
-          layoutId="level-card"
-          className="bg-gradient-to-br from-[#0F172A] to-[#1E293B] border border-slate-800 rounded-3xl p-8 text-white shadow-xl md:col-span-2 relative overflow-hidden"
+      {/* TABS */}
+      <div className="flex gap-2 p-1 bg-neutral-200/50 dark:bg-slate-800/50 rounded-xl max-w-[320px] mb-8">
+        <button
+          onClick={() => setActiveTab('conquests')}
+          className={cn(
+            "flex-1 py-2 text-sm font-bold rounded-lg transition-all",
+            activeTab === 'conquests' ? "bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm" : "text-neutral-500 hover:text-neutral-900 dark:text-slate-400 dark:hover:text-slate-200"
+          )}
         >
-          <div className="relative z-10 flex flex-col h-full justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-6">
-                 <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center border-2 border-white/10 shadow-inner backdrop-blur-sm", currentLevel.bg, currentLevel.color)}>
-                    <Award size={28} />
-                 </div>
-                 <div>
-                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Seu Nível Atual</p>
-                    <h2 className={cn("text-2xl font-bold tracking-tight", currentLevel.color)}>{currentLevel.name}</h2>
-                 </div>
-              </div>
-              
-              <div className="flex items-end gap-2 mb-8">
-                <span className="text-6xl font-mono font-bold tracking-tighter text-white">{points}</span>
-                <span className="text-xl text-slate-500 font-bold font-mono relative bottom-2">PTS</span>
-              </div>
-            </div>
-            
-            <div className="space-y-3">
-              <div className="flex justify-between text-[11px] font-mono font-bold text-slate-400 uppercase tracking-widest">
-                <span>Progresso para o Próximo Nível</span>
-                <span>{nextLevel ? `${nextTarget - points} pts restantes` : 'Nível Máximo'}</span>
-              </div>
-              <div className="w-full bg-slate-900/80 rounded-full h-3 border border-slate-700/50 overflow-hidden relative">
-                <motion.div 
-                  initial={{ width: 0 }}
-                  animate={{ width: `${progressPercent}%` }}
-                  transition={{ duration: 1, ease: "easeOut" }}
-                  className={cn("h-full rounded-full relative", currentLevel.color.replace('text-', 'bg-'))}
-                >
-                  <div className="absolute inset-0 bg-white/20 w-full h-full" style={{ backgroundImage: 'linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent)', backgroundSize: '1rem 1rem' }}></div>
-                </motion.div>
-              </div>
-            </div>
-          </div>
-          <Target className="absolute -right-8 -bottom-8 text-white/5 w-64 h-64 pointer-events-none transform rotate-12" />
-        </motion.div>
-
-        <div className="bg-white dark:bg-[#0B1221] rounded-3xl border border-neutral-200 dark:border-slate-800 p-8 flex flex-col justify-between shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 rounded-full blur-3xl group-hover:bg-orange-500/10 transition-colors"></div>
-          
-          <div>
-            <div className="w-12 h-12 bg-orange-50 dark:bg-orange-950/30 border border-orange-100 dark:border-orange-900/50 text-orange-500 rounded-2xl flex items-center justify-center mb-6 shadow-sm">
-              <Flame size={24} />
-            </div>
-            <h3 className="text-xl font-bold font-display text-neutral-900 dark:text-white mb-2 tracking-tight">Missões Ativas</h3>
-            <p className="text-sm text-neutral-500 dark:text-slate-400 mb-6">Complete leitura de notícias e quizzes para avançar de nível mais rápido.</p>
-          </div>
-          
-          <div className="flex flex-col gap-3 mb-6 relative z-10">
-             <Link to="/" className="bg-neutral-50 dark:bg-slate-900/50 hover:bg-neutral-100 dark:hover:bg-slate-800 rounded-xl p-4 border border-neutral-200 dark:border-slate-800/50 flex items-center justify-between transition-all group/link">
-               <div className="flex items-center gap-3">
-                 <BookOpen size={16} className="text-blue-500" />
-                 <span className="text-[13px] font-bold text-neutral-700 dark:text-slate-300 tracking-wide">Notícias Recentes</span>
-               </div>
-               <span className="font-mono text-sm font-bold text-neutral-900 dark:text-white bg-white dark:bg-slate-950 px-2.5 py-1 rounded-md border border-neutral-200 dark:border-slate-800">{pendingNews.length}</span>
-             </Link>
-             
-             <Link to="/" className="bg-neutral-50 dark:bg-slate-900/50 hover:bg-neutral-100 dark:hover:bg-slate-800 rounded-xl p-4 border border-neutral-200 dark:border-slate-800/50 flex items-center justify-between transition-all group/link">
-               <div className="flex items-center gap-3">
-                 <MessageCircleQuestion size={16} className="text-amber-500" />
-                 <span className="text-[13px] font-bold text-neutral-700 dark:text-slate-300 tracking-wide">Quizzes Pendentes</span>
-               </div>
-               <span className="font-mono text-sm font-bold text-neutral-900 dark:text-white bg-white dark:bg-slate-950 px-2.5 py-1 rounded-md border border-neutral-200 dark:border-slate-800">{pendingQuizzes.length}</span>
-             </Link>
-          </div>
-        </div>
+          Meu Progresso
+        </button>
+        <button
+          onClick={() => setActiveTab('ranking')}
+          className={cn(
+            "flex-1 py-2 text-sm font-bold rounded-lg transition-all",
+            activeTab === 'ranking' ? "bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm" : "text-neutral-500 hover:text-neutral-900 dark:text-slate-400 dark:hover:text-slate-200"
+          )}
+        >
+          Ranking
+        </button>
       </div>
 
-      <div>
-        <h3 className="text-lg font-bold font-display text-neutral-900 dark:text-white mb-6">Estrutura de Níveis</h3>
-        
-        <div className="flex flex-col gap-4">
-          {LEVELS.map((level, idx) => {
-            const isUnlocked = points >= level.req;
-            const isCurrent = currentLevel.id === level.id;
-            
-            return (
-              <div 
-                key={level.id} 
-                className={cn(
-                  "border rounded-2xl p-5 flex items-center gap-6 transition-all duration-300 relative overflow-hidden",
-                  isCurrent ? "bg-white dark:bg-slate-900 border-blue-200 dark:border-slate-700 shadow-md ring-1 ring-blue-500/20" : 
-                  isUnlocked ? "bg-white dark:bg-[#0B1221] border-neutral-200 dark:border-slate-800" : "bg-neutral-50 dark:bg-slate-900/30 border-neutral-100 dark:border-slate-800/50 opacity-60"
-                )}
-              >
-                {isCurrent && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-l-2xl"></div>}
-                
-                <div className={cn(
-                  "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border-2 transition-all",
-                  isUnlocked ? cn(level.bg, level.border, level.color) : "bg-neutral-100 dark:bg-slate-950 border-neutral-200 dark:border-slate-800 text-neutral-400 dark:text-slate-600"
-                )}>
-                  {isUnlocked ? <Award size={24} /> : <Award size={24} className="opacity-50" />}
-                </div>
-                
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-1">
-                    <h4 className={cn("text-lg font-bold tracking-tight", isUnlocked ? "text-neutral-900 dark:text-white" : "text-neutral-500 dark:text-slate-500")}>
-                      {level.name}
-                    </h4>
-                    {isCurrent && <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-2 py-0.5 rounded uppercase font-mono text-[9px] font-bold tracking-widest border border-blue-200 dark:border-blue-800/50">Você está aqui</span>}
+      <AnimatePresence mode="wait">
+        {activeTab === 'conquests' ? (
+          <motion.div 
+            key="conquests"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="grid md:grid-cols-3 gap-6 mb-10">
+              <div className="bg-gradient-to-br from-[#0F172A] to-[#1E293B] border border-slate-800 rounded-3xl p-8 text-white shadow-xl md:col-span-2 relative overflow-hidden">
+                <div className="relative z-10 flex flex-col h-full justify-between">
+                  <div>
+                    <div className="flex items-center gap-3 mb-6">
+                       <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center border-2 border-white/10 shadow-inner backdrop-blur-sm", currentLevel.bg, currentLevel.color)}>
+                          <Award size={28} />
+                       </div>
+                       <div>
+                          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Seu Nível Atual</p>
+                          <h2 className={cn("text-2xl font-bold tracking-tight", currentLevel.color)}>{currentLevel.name}</h2>
+                       </div>
+                    </div>
+                    
+                    <div className="flex items-end gap-2 mb-8">
+                      <span className="text-6xl font-mono font-bold tracking-tighter text-white">{points}</span>
+                      <span className="text-xl text-slate-500 font-bold font-mono relative bottom-2">PTS</span>
+                    </div>
                   </div>
-                  <p className="text-xs font-mono font-semibold uppercase tracking-widest text-neutral-500 dark:text-slate-500">{level.req} PTS Necessários</p>
+                  
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-[11px] font-mono font-bold text-slate-400 uppercase tracking-widest">
+                      <span>Progresso para o Próximo Nível</span>
+                      <span>{nextLevel ? `${nextTarget - points} pts restantes` : 'Nível Máximo'}</span>
+                    </div>
+                    <div className="w-full bg-slate-900/80 rounded-full h-3 border border-slate-700/50 overflow-hidden relative">
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${progressPercent}%` }}
+                        transition={{ duration: 1, ease: "easeOut" }}
+                        className={cn("h-full rounded-full relative", currentLevel.color.replace('text-', 'bg-'))}
+                      >
+                        <div className="absolute inset-0 bg-white/20 w-full h-full" style={{ backgroundImage: 'linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent)', backgroundSize: '1rem 1rem' }}></div>
+                      </motion.div>
+                    </div>
+                  </div>
+                </div>
+                <Target className="absolute -right-8 -bottom-8 text-white/5 w-64 h-64 pointer-events-none transform rotate-12" />
+              </div>
+
+              <div className="bg-white dark:bg-[#0B1221] rounded-3xl border border-neutral-200 dark:border-slate-800 p-8 flex flex-col justify-between shadow-sm relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 rounded-full blur-3xl group-hover:bg-orange-500/10 transition-colors"></div>
+                
+                <div>
+                  <div className="w-12 h-12 bg-orange-50 dark:bg-orange-950/30 border border-orange-100 dark:border-orange-900/50 text-orange-500 rounded-2xl flex items-center justify-center mb-6 shadow-sm">
+                    <Flame size={24} />
+                  </div>
+                  <h3 className="text-xl font-bold font-display text-neutral-900 dark:text-white mb-2 tracking-tight">Missões Ativas</h3>
+                  <p className="text-sm text-neutral-500 dark:text-slate-400 mb-6">Complete leitura de notícias e quizzes para ganhar pontos.</p>
+                </div>
+                
+                <div className="flex flex-col gap-3 relative z-10">
+                   <Link to="/" className="bg-neutral-50 dark:bg-slate-900/50 hover:bg-neutral-100 dark:hover:bg-slate-800 rounded-xl p-4 border border-neutral-200 dark:border-slate-800/50 flex items-center justify-between transition-all group/link">
+                     <div className="flex items-center gap-3">
+                       <BookOpen size={16} className="text-blue-500" />
+                       <span className="text-[13px] font-bold text-neutral-700 dark:text-slate-300 tracking-wide">Notícias Novas</span>
+                     </div>
+                     <span className="font-mono text-sm font-bold text-neutral-900 dark:text-white bg-white dark:bg-slate-950 px-2.5 py-1 rounded-md border border-neutral-200 dark:border-slate-800">{pendingNews.length}</span>
+                   </Link>
+                   
+                   <Link to="/" className="bg-neutral-50 dark:bg-slate-900/50 hover:bg-neutral-100 dark:hover:bg-slate-800 rounded-xl p-4 border border-neutral-200 dark:border-slate-800/50 flex items-center justify-between transition-all group/link">
+                     <div className="flex items-center gap-3">
+                       <MessageCircleQuestion size={16} className="text-amber-500" />
+                       <span className="text-[13px] font-bold text-neutral-700 dark:text-slate-300 tracking-wide">Quizzes</span>
+                     </div>
+                     <span className="font-mono text-sm font-bold text-neutral-900 dark:text-white bg-white dark:bg-slate-950 px-2.5 py-1 rounded-md border border-neutral-200 dark:border-slate-800">{pendingQuizzes.length}</span>
+                   </Link>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-bold font-display text-neutral-900 dark:text-white mb-6">Níveis da Plataforma</h3>
+              
+              <div className="flex flex-col gap-4">
+                {LEVELS.map((level) => {
+                  const isUnlocked = points >= level.req;
+                  const isCurrent = currentLevel.id === level.id;
+                  
+                  return (
+                    <div 
+                      key={level.id} 
+                      className={cn(
+                        "border rounded-2xl p-5 flex items-center gap-6 transition-all duration-300 relative overflow-hidden",
+                        isCurrent ? "bg-white dark:bg-slate-900 border-blue-200 dark:border-slate-700 shadow-md ring-1 ring-blue-500/20" : 
+                        isUnlocked ? "bg-white dark:bg-[#0B1221] border-neutral-200 dark:border-slate-800" : "bg-neutral-50 dark:bg-slate-900/30 border-neutral-100 dark:border-slate-800/50 opacity-60"
+                      )}
+                    >
+                      {isCurrent && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-l-2xl"></div>}
+                      
+                      <div className={cn(
+                        "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border-2 transition-all",
+                        isUnlocked ? cn(level.bg, level.border, level.color) : "bg-neutral-100 dark:bg-slate-950 border-neutral-200 dark:border-slate-800 text-neutral-400 dark:text-slate-600"
+                      )}>
+                        {isUnlocked ? <Award size={24} /> : <Award size={24} className="opacity-50" />}
+                      </div>
+                      
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-1">
+                          <h4 className={cn("text-lg font-bold tracking-tight", isUnlocked ? "text-neutral-900 dark:text-white" : "text-neutral-500 dark:text-slate-500")}>
+                            {level.name}
+                          </h4>
+                          {isCurrent && <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-2 py-0.5 rounded uppercase font-mono text-[9px] font-bold tracking-widest border border-blue-200 dark:border-blue-800/50">Você está aqui</span>}
+                        </div>
+                        <p className="text-xs font-mono font-semibold uppercase tracking-widest text-neutral-500 dark:text-slate-500">{level.req} PTS Necessários</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div 
+            key="ranking"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+          >
+            {loadingRanking && users.length === 0 ? (
+              <div className="flex justify-center py-20">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-[#0B1221] border border-neutral-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-neutral-50 dark:bg-slate-900/50 border-b border-neutral-200 dark:border-slate-800">
+                        <th className="py-4 px-6 font-semibold text-neutral-600 dark:text-slate-300 w-24 text-center">Posição</th>
+                        <th className="py-4 px-6 font-semibold text-neutral-600 dark:text-slate-300">Colaborador</th>
+                        <th className="py-4 px-6 font-semibold text-neutral-600 dark:text-slate-300 text-center">Nível</th>
+                        <th className="py-4 px-6 font-semibold text-neutral-600 dark:text-slate-300 text-right">Pontos</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map((user, index) => {
+                        const isCurrent = user.email === profile?.email;
+                        const isTop3 = index < 3;
+                        
+                        return (
+                          <tr 
+                            key={user.id} 
+                            className={cn(
+                              "border-b border-neutral-100 dark:border-slate-800/50 transition-colors last:border-0",
+                              isCurrent ? "bg-blue-50/50 dark:bg-blue-900/10" : "hover:bg-neutral-50 dark:hover:bg-slate-900/30",
+                              { 'animate-pulse': loadingRanking }
+                            )}
+                          >
+                            <td className="py-4 px-6 text-center">
+                              <div className="flex justify-center">
+                                 {index === 0 ? <Medal size={28} className="text-yellow-500 drop-shadow-md" /> :
+                                  index === 1 ? <Medal size={28} className="text-slate-400 drop-shadow-md" /> :
+                                  index === 2 ? <Medal size={28} className="text-orange-500 drop-shadow-md" /> :
+                                  <span className="font-mono font-bold text-neutral-500 dark:text-slate-500 text-lg">{index + 1}º</span>}
+                              </div>
+                            </td>
+                            <td className="py-4 px-6">
+                              <div className="flex items-center gap-3">
+                                <div className={cn(
+                                  "w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm",
+                                  isTop3 ? "bg-gradient-to-br from-blue-500 to-indigo-600" : "bg-neutral-200 dark:bg-slate-800 text-neutral-700 dark:text-slate-300"
+                                )}>
+                                  {(user.email || 'U').substring(0, 2).toUpperCase()}
+                                </div>
+                                <div>
+                                  <span className={cn(
+                                    "font-bold block tracking-tight",
+                                    isCurrent ? "text-blue-600 dark:text-blue-400" : "text-neutral-900 dark:text-white"
+                                  )}>
+                                    {(user.email || 'Usuário').split('@')[0]}
+                                    {isCurrent && <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-2 py-0.5 rounded-full uppercase tracking-wider hidden sm:inline-block">Você</span>}
+                                  </span>
+                                  <span className="text-xs text-neutral-500 dark:text-slate-500 hidden sm:block">{user.role === 'editor' ? 'Administrador' : 'Colaborador'}</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-4 px-6 text-center">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-neutral-500 dark:text-slate-400 bg-neutral-100 dark:bg-slate-800 px-2 py-1 rounded-md">
+                                <Star size={12} className={user.points >= 1000 ? "text-amber-500" : user.points >= 500 ? "text-violet-500" : "text-blue-500"} />
+                                {user.points >= 1000 ? 'Mestre' : user.points >= 500 ? 'Especialista' : user.points >= 200 ? 'Aprendiz' : 'Novato'}
+                              </span>
+                            </td>
+                            <td className="py-4 px-6 text-right">
+                              <div className="flex flex-col items-end">
+                                <span className={cn(
+                                  "font-mono font-bold text-lg",
+                                  isTop3 ? "text-neutral-900 dark:text-white" : "text-neutral-700 dark:text-slate-300"
+                                )}>
+                                  {user.points || 0}
+                                </span>
+                                <span className="text-[9px] font-mono text-neutral-400 dark:text-slate-500 uppercase tracking-widest">PTS</span>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
