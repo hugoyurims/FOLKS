@@ -161,9 +161,17 @@ async function startServer() {
     }
   });
 
+  const newsCache = new Map<string, { data: any; timestamp: number }>();
+
   // External News Fetcher (Simulated via Gemini)
   app.post("/api/fetch-external-news", verifyEditor, async (req, res) => {
     try {
+      const cacheKey = "external_news";
+      const cached = newsCache.get(cacheKey);
+      if (cached && (Date.now() - cached.timestamp < 5 * 60 * 1000)) {
+        return res.json(cached.data);
+      }
+
       if (!process.env.GEMINI_API_KEY) {
          throw new Error("Missing Gemini API Key");
       }
@@ -188,6 +196,8 @@ async function startServer() {
       let jsonText = response.text || "[]";
       jsonText = jsonText.replace(/```json/g, "").replace(/```/g, "").trim();
       const articles = JSON.parse(jsonText);
+      
+      newsCache.set(cacheKey, { data: articles, timestamp: Date.now() });
       res.json(articles);
     } catch (error) {
        console.error("Fetch News Error:", error);

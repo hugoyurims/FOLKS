@@ -156,71 +156,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let unsubscribeAuth = () => {};
-    let unsubscribeDoc = () => {};
 
     initFirebase().then(({ auth, db }) => {
       unsubscribeAuth = onAuthStateChanged(auth, async (u) => {
         setUser(u);
-        unsubscribeDoc();
         
         if (u) {
           try {
             const userRef = doc(db, 'users', u.uid);
-            unsubscribeDoc = onSnapshot(userRef, async (userSnap) => {
-              let p: UserProfile;
-              
-              const isTargetEmail = u.email === 'hugo.yuri.77@gmail.com';
-              
-              if (!userSnap.exists()) {
-                p = {
-                  email: u.email || undefined,
-                  role: isTargetEmail ? 'editor' : 'collaborator',
-                  points: isTargetEmail ? 1250 : 0,
-                  badges: isTargetEmail ? ['🛡️ Leitor Assíduo', '📖 Mestre do Foco'] : [],
-                  readArticles: [],
-                  answeredQuizzes: []
-                };
-                await setDoc(userRef, { ...p, createdAt: new Date().toISOString() });
-              } else {
-                p = userSnap.data() as UserProfile;
-                let needsUpdate = false;
-                
-                if (!p.email && u.email) {
-                  p.email = u.email;
-                  needsUpdate = true;
-                }
-                
-                if (isTargetEmail && (p.role !== 'editor' || p.points === 0)) {
-                  p = { ...p, role: 'editor', points: Math.max(p.points || 0, 1250), badges: Array.from(new Set([...(p.badges || []), '🛡️ Leitor Assíduo', '📖 Mestre do Foco'])) };
-                  needsUpdate = true;
-                }
-                
-                if (needsUpdate) {
-                  await updateDoc(userRef, p as any);
-                }
-              }
-              setProfile(p);
-              setActiveRole(p.role); // Default to their real role
-            });
+            const userSnap = await getDoc(userRef);
+            let p: UserProfile;
             
             const isTargetEmail = u.email === 'hugo.yuri.77@gmail.com';
+            
+            if (!userSnap.exists()) {
+              p = {
+                email: u.email || undefined,
+                role: isTargetEmail ? 'editor' : 'collaborator',
+                points: isTargetEmail ? 1250 : 0,
+                badges: isTargetEmail ? ['🛡️ Leitor Assíduo', '📖 Mestre do Foco'] : [],
+                readArticles: [],
+                answeredQuizzes: []
+              };
+              await setDoc(userRef, { ...p, createdAt: new Date().toISOString() });
+            } else {
+              p = userSnap.data() as UserProfile;
+              let needsUpdate = false;
+              
+              if (!p.email && u.email) {
+                p.email = u.email;
+                needsUpdate = true;
+              }
+              
+              if (isTargetEmail && (p.role !== 'editor' || p.points === 0)) {
+                p = { ...p, role: 'editor', points: Math.max(p.points || 0, 1250), badges: Array.from(new Set([...(p.badges || []), '🛡️ Leitor Assíduo', '📖 Mestre do Foco'])) };
+                needsUpdate = true;
+              }
+              
+              if (needsUpdate) {
+                await updateDoc(userRef, p as any);
+              }
+            }
+            setProfile(p);
+            setActiveRole(p.role); // Default to their real role
+            
+            setLoading(false);
+            
             if (isTargetEmail) {
-              await seedDatabase(db, u.uid);
+              seedDatabase(db, u.uid).catch(e => console.error("Seed error:", e));
             }
           } catch (e) {
             console.error("Error fetching/updating profile", e);
+            setLoading(false);
           }
         } else {
           setProfile(null);
           setActiveRole('collaborator');
+          setLoading(false);
         }
-        setLoading(false);
       });
     });
 
     return () => {
       unsubscribeAuth();
-      unsubscribeDoc();
     };
   }, []);
 

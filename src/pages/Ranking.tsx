@@ -1,54 +1,49 @@
 import React, { useEffect, useState } from 'react';
 import { initFirebase } from '../lib/firebase';
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { Trophy, Medal, Search, Star } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
 import { motion } from 'framer-motion';
+import { getFromCache, setInCache } from '../lib/cache';
 
 export function Ranking() {
   const { profile } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-    let isMounted = true;
-    
-    async function setupRanking() {
-      try {
-        const { db } = await initFirebase();
-        if (!isMounted) return;
-        
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, orderBy('points', 'desc'), limit(50));
-        
-        unsubscribe = onSnapshot(q, (snapshot) => {
-          if (!isMounted) return;
-          const rankingData = snapshot.docs.map((doc, index) => ({
-            id: doc.id,
-            position: index + 1,
-            ...doc.data()
-          }));
-          
-          setUsers(rankingData);
-          setLoading(false);
-        }, (error) => {
-          console.error("Error loading ranking", error);
-          if (isMounted) setLoading(false);
-        });
-      } catch (e) {
-        console.error("Error setting up ranking", e);
-        if (isMounted) setLoading(false);
-      }
+  const loadRanking = async () => {
+    const cached = getFromCache('ranking');
+    if (cached) {
+      setUsers(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
     }
     
-    setupRanking();
-    
-    return () => {
-      isMounted = false;
-      if (unsubscribe) unsubscribe();
-    };
+    try {
+      const { db } = await initFirebase();
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, orderBy('points', 'desc'), limit(50));
+      
+      const snapshot = await getDocs(q);
+      const rankingData = snapshot.docs.map((doc, index) => ({
+        id: doc.id,
+        position: index + 1,
+        ...doc.data()
+      }));
+      
+      setUsers(rankingData);
+      setInCache('ranking', rankingData);
+    } catch (e) {
+      console.error("Error setting up ranking", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadRanking();
   }, []);
 
   return (

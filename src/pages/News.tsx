@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { initFirebase } from '../lib/firebase';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, getDocs } from 'firebase/firestore';
+import { collection, query, where, addDoc, updateDoc, doc, deleteDoc, getDocs } from 'firebase/firestore';
 import { Loader2, AlertCircle, CheckCircle2, BookOpen, MessageCircleQuestion, Plus, RefreshCcw, Edit, Trash2, Sparkles } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { getFromCache, setInCache } from '../lib/cache';
 
 interface Article {
   id: string;
@@ -47,56 +48,51 @@ export function News() {
   const answeredQuizzes = profile?.answeredQuizzes || [];
   const isEditor = activeRole === 'editor';
 
-  useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-    let isMounted = true;
+  const loadNews = async () => {
+    const cached = getFromCache('news');
+    if (cached) {
+      setNews(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     
-    const setupNews = async () => {
-      try {
-        const { db } = await initFirebase();
-        if (!isMounted) return;
-        
-        let newsQuery = query(collection(db, 'articles'));
-        // If collaborator, only show published. If editor, show all (including drafts).
-        if (!isEditor) {
-          newsQuery = query(collection(db, 'articles'), where('status', '==', 'published'));
-        }
-        
-        unsubscribe = onSnapshot(newsQuery, (snap) => {
-          if (!isMounted) return;
-          const uniqueTitles = new Set<string>();
-          const data = snap.docs.reduce((acc, doc) => {
-            const article = { 
-              id: doc.id, 
-              ...doc.data(),
-              category: doc.data().category || 'general'
-            } as Article;
-              
-              if (!uniqueTitles.has(article.title)) {
-                uniqueTitles.add(article.title);
-                acc.push(article);
-              }
-              return acc;
-            }, [] as Article[]);
-            data.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-            setNews(data);
-            setLoading(false);
-        }, (error) => {
-          console.error("Error loading news", error);
-          if (isMounted) setLoading(false);
-        });
-      } catch (e) {
-        console.error("Error setting up news", e);
-        if (isMounted) setLoading(false);
+    try {
+      const { db } = await initFirebase();
+      let newsQuery = query(collection(db, 'articles'));
+      // If collaborator, only show published. If editor, show all (including drafts).
+      if (!isEditor) {
+        newsQuery = query(collection(db, 'articles'), where('status', '==', 'published'));
       }
-    };
-    
-    setupNews();
-    
-    return () => {
-      isMounted = false;
-      if (unsubscribe) unsubscribe();
-    };
+      
+      const snap = await getDocs(newsQuery);
+      const uniqueTitles = new Set<string>();
+      const data = snap.docs.reduce((acc, doc) => {
+        const article = { 
+          id: doc.id, 
+          ...doc.data(),
+          category: doc.data().category || 'general'
+        } as Article;
+        
+        if (!uniqueTitles.has(article.title)) {
+          uniqueTitles.add(article.title);
+          acc.push(article);
+        }
+        return acc;
+      }, [] as Article[]);
+      
+      data.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setNews(data);
+      setInCache('news', data);
+    } catch (e) {
+      console.error("Error loading news", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadNews();
   }, [isEditor]);
 
   const handleSyncNews = async () => {

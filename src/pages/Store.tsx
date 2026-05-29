@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { initFirebase } from '../lib/firebase';
-import { collection, doc, runTransaction, addDoc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { collection, doc, runTransaction, addDoc, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
 import { Gift, Lock, Loader2, CheckCircle2, ShoppingBag, Plus, Edit, Trash2 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -10,6 +10,7 @@ import folksMugImage from '../assets/images/folks_mug_1779894900152.png';
 import ifoodVoucherImage from '../assets/images/ifood_voucher_1779894329011.png';
 // @ts-ignore
 import dayOffImage from '../assets/images/day_off_1779894871806.png';
+import { getFromCache, setInCache } from '../lib/cache';
 
 interface Benefit {
   id: string;
@@ -37,59 +38,54 @@ export function Store() {
   const [imageUrl, setImageUrl] = useState('');
   const [savingMsg, setSavingMsg] = useState('');
 
-  useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-    let isMounted = true;
+  const loadBenefits = async () => {
+    const cached = getFromCache('benefits');
+    if (cached) {
+      setBenefits(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     
-    const setupBenefits = async () => {
-      try {
-        const { db } = await initFirebase();
-        if (!isMounted) return;
+    try {
+      const { db } = await initFirebase();
+      
+      const snap = await getDocs(collection(db, 'benefits'));
+      const uniqueMap = new Map<string, Benefit>();
+      
+      snap.docs.forEach(doc => {
+        let b = { id: doc.id, ...doc.data() } as Benefit;
         
-        unsubscribe = onSnapshot(collection(db, 'benefits'), (snap) => {
-          if (!isMounted) return;
-          const uniqueMap = new Map<string, Benefit>();
-          
-          snap.docs.forEach(doc => {
-            let b = { id: doc.id, ...doc.data() } as Benefit;
-            
-            const bName = b.name || '';
+        const bName = b.name || '';
 
-            if (bName.includes("Day Off Acadêmico") || bName.includes("Day Off")) {
-              b.name = "Day Off";
-              b.imageUrl = dayOffImage;
-            } else if (bName.includes("Caneca")) {
-              b.name = "Caneca FOLKS";
-              b.imageUrl = folksMugImage;
-            } else if (bName.includes("iFood")) {
-              b.imageUrl = ifoodVoucherImage;
-            }
+        if (bName.includes("Day Off Acadêmico") || bName.includes("Day Off")) {
+          b.name = "Day Off";
+          b.imageUrl = dayOffImage;
+        } else if (bName.includes("Caneca")) {
+          b.name = "Caneca FOLKS";
+          b.imageUrl = folksMugImage;
+        } else if (bName.includes("iFood")) {
+          b.imageUrl = ifoodVoucherImage;
+        }
 
-            if (b.name && !uniqueMap.has(b.name)) {
-               uniqueMap.set(b.name, b);
-            }
-          });
-          const data = Array.from(uniqueMap.values());
-          // Sort by cost ascending
-          data.sort((a,b) => a.cost - b.cost);
-          setBenefits(data);
-          setLoading(false);
-        }, (error) => {
-           console.error("Error loading benefits", error);
-           if (isMounted) setLoading(false);
-        });
-      } catch (e) {
-        console.error("Error setting up benefits", e);
-        if (isMounted) setLoading(false);
-      }
-    };
-    
-    setupBenefits();
-    
-    return () => {
-      isMounted = false;
-      if (unsubscribe) unsubscribe();
-    };
+        if (b.name && !uniqueMap.has(b.name)) {
+           uniqueMap.set(b.name, b);
+        }
+      });
+      const data = Array.from(uniqueMap.values());
+      // Sort by cost ascending
+      data.sort((a,b) => a.cost - b.cost);
+      setBenefits(data);
+      setInCache('benefits', data);
+    } catch (e) {
+      console.error("Error loading benefits", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadBenefits();
   }, []);
 
   const handleRedeem = async (b: Benefit) => {
