@@ -4,7 +4,6 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
 import dotenv from 'dotenv';
 import fs from 'fs';
 
@@ -17,16 +16,28 @@ if (!getApps().length) {
   initializeApp({ projectId: firebaseConfig.projectId });
 }
 
-// ── Helper: grava erro no Firestore (error_logs) ──────────────────────────
+// ── Helper: grava erro no Firestore via REST API (sem credenciais de service account) ──
 async function logError(route: string, error: unknown, extra?: Record<string, unknown>) {
   try {
-    const db = getFirestore();
-    await db.collection('error_logs').add({
-      route,
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : null,
-      extra: extra ?? null,
-      timestamp: new Date().toISOString(),
+    const projectId = firebaseConfig.projectId;
+    const dbId = firebaseConfig.firestoreDatabaseId;
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${dbId}/documents/error_logs`;
+
+    const body = {
+      fields: {
+        route:     { stringValue: route },
+        message:   { stringValue: error instanceof Error ? error.message : String(error) },
+        stack:     { stringValue: error instanceof Error ? (error.stack ?? '') : '' },
+        extra:     { stringValue: extra ? JSON.stringify(extra) : '' },
+        timestamp: { stringValue: new Date().toISOString() },
+      }
+    };
+
+    // Usa a API Key pública do firebase-applet-config para autenticar a escrita
+    await fetch(`${url}?key=${firebaseConfig.apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
     });
   } catch (logErr) {
     // Nunca deixar o logger derrubar a aplicação
