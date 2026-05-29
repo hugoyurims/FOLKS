@@ -71,6 +71,14 @@ export const initFirebase = async () => {
 export const getDb = () => db;
 export const getFirebaseAuth = () => auth;
 
+export const getIdToken = async () => {
+  if (!auth) {
+    const result = await initFirebase();
+    auth = result.auth;
+  }
+  return auth?.currentUser ? await auth.currentUser.getIdToken(true) : null;
+};
+
 export const getSecondaryAuth = async () => {
   const configSource = await import('../../firebase-applet-config.json');
   const firebaseConfig = configSource.default;
