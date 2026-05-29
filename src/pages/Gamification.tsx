@@ -3,7 +3,7 @@ import { useAuth } from '../hooks/useAuth';
 import { Target, Award, Flame, BookOpen, MessageCircleQuestion, ChevronRight, Trophy } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Link } from 'react-router-dom';
-import { getDb } from '../lib/firebase';
+import { initFirebase } from '../lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import Confetti from 'react-confetti';
@@ -48,10 +48,14 @@ export function Gamification() {
   }, [currentLevel.id, prevLevelId]);
 
   useEffect(() => {
+    let isMounted = true;
     async function loadPending() {
        try {
-         const db = getDb();
+         const { db } = await initFirebase();
+         if (!isMounted) return;
+         
          const snap = await getDocs(query(collection(db, 'articles'), where('status', '==', 'published')));
+         if (!isMounted) return;
          
          const uniqueTitles = new Set<string>();
          const uniqueArticles: any[] = [];
@@ -73,6 +77,9 @@ export function Gamification() {
        }
     }
     if (profile) loadPending();
+    return () => {
+      isMounted = false;
+    };
   }, [profile]);
 
   return (

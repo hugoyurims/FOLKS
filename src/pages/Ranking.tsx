@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getDb } from '../lib/firebase';
+import { initFirebase } from '../lib/firebase';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { Trophy, Medal, Search, Star } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
@@ -12,15 +12,19 @@ export function Ranking() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let unsubscribe: () => void;
+    let unsubscribe: (() => void) | undefined;
+    let isMounted = true;
     
     async function setupRanking() {
       try {
-        const db = getDb();
+        const { db } = await initFirebase();
+        if (!isMounted) return;
+        
         const usersRef = collection(db, 'users');
         const q = query(usersRef, orderBy('points', 'desc'), limit(50));
         
         unsubscribe = onSnapshot(q, (snapshot) => {
+          if (!isMounted) return;
           const rankingData = snapshot.docs.map((doc, index) => ({
             id: doc.id,
             position: index + 1,
@@ -31,17 +35,18 @@ export function Ranking() {
           setLoading(false);
         }, (error) => {
           console.error("Error loading ranking", error);
-          setLoading(false);
+          if (isMounted) setLoading(false);
         });
       } catch (e) {
         console.error("Error setting up ranking", e);
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
     
     setupRanking();
     
     return () => {
+      isMounted = false;
       if (unsubscribe) unsubscribe();
     };
   }, []);
@@ -106,14 +111,14 @@ export function Ranking() {
                             "w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm",
                             isTop3 ? "bg-gradient-to-br from-blue-500 to-indigo-600" : "bg-neutral-200 dark:bg-slate-800 text-neutral-700 dark:text-slate-300"
                           )}>
-                            {user.email.substring(0, 2).toUpperCase()}
+                            {(user.email || 'U').substring(0, 2).toUpperCase()}
                           </div>
                           <div>
                             <span className={cn(
                               "font-bold block tracking-tight",
                               isCurrent ? "text-blue-600 dark:text-blue-400" : "text-neutral-900 dark:text-white"
                             )}>
-                              {user.email.split('@')[0]}
+                              {(user.email || 'Usuário').split('@')[0]}
                               {isCurrent && <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-2 py-0.5 rounded-full uppercase tracking-wider hidden sm:inline-block">Você</span>}
                             </span>
                             <span className="text-xs text-neutral-500 dark:text-slate-500 hidden sm:block">{user.role === 'editor' ? 'Administrador' : 'Colaborador'}</span>

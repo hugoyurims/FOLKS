@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { getDb, getSecondaryAuth, getFirebaseAuth } from '../lib/firebase';
+import { initFirebase, getSecondaryAuth } from '../lib/firebase';
 import { collection, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, signOut, updatePassword } from 'firebase/auth';
 import { ShieldCheck, User, UserPlus } from 'lucide-react';
@@ -27,7 +27,7 @@ export function Users() {
 
   const loadUsers = async () => {
     try {
-      const db = getDb();
+      const { db } = await initFirebase();
       const snap = await getDocs(collection(db, 'users'));
       const loaded = snap.docs.map(doc => ({
         id: doc.id,
@@ -56,7 +56,7 @@ export function Users() {
   const toggleRole = async (userId: string, currentRole: string) => {
     if (!confirm(`Deseja alterar o perfil deste usuário?`)) return;
     try {
-      const db = getDb();
+      const { db } = await initFirebase();
       const nextRole = currentRole === 'editor' ? 'collaborator' : 'editor';
       await updateDoc(doc(db, 'users', userId), { role: nextRole });
       
@@ -78,7 +78,7 @@ export function Users() {
       const auth2 = await getSecondaryAuth();
       // This creates the user in Firebase Auth without logging out the main user because it's a separate app instance
       const cred = await createUserWithEmailAndPassword(auth2, newEmail.trim(), "Senha123");
-      const db = getDb();
+      const { db } = await initFirebase();
       
       // Initialize their profile in firestore
       await setDoc(doc(db, 'users', cred.user.uid), {
@@ -115,7 +115,7 @@ export function Users() {
     }
     setChangingPassword(true);
     try {
-      const auth = getFirebaseAuth();
+      const { auth } = await initFirebase();
       if (auth.currentUser) {
         await updatePassword(auth.currentUser, newPassword);
         alert("Senha atualizada com sucesso!");
@@ -127,7 +127,8 @@ export function Users() {
       console.error(e);
       if (e.code === 'auth/requires-recent-login') {
          alert("Por questões de segurança, você precisa fazer login novamente para alterar a senha.");
-         signOut(getFirebaseAuth());
+         const { auth } = await initFirebase();
+         signOut(auth);
       } else {
          alert("Erro ao alterar senha: " + e.message);
       }

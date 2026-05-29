@@ -30,30 +30,42 @@ export interface FirestoreErrorInfo {
 let app: any = null;
 let db: any = null;
 let auth: any = null;
+let initPromise: Promise<{ app: any, db: any, auth: any }> | null = null;
 
 export const initFirebase = async () => {
   if (app) return { app, db, auth };
+  if (initPromise) return initPromise;
   
-  // Dynamic import so it catches the newly created json
-  const configSource = await import('../../firebase-applet-config.json');
-  const firebaseConfig = configSource.default;
-  
-  app = initializeApp(firebaseConfig);
-  db = getFirestore(app, firebaseConfig.firestoreDatabaseId); 
-  
-  try {
-    await enableIndexedDbPersistence(db);
-  } catch (err: any) {
-    if (err.code == 'failed-precondition') {
-      console.warn('Multiple tabs open, persistence can only be enabled in one tab at a a time.');
-    } else if (err.code == 'unimplemented') {
-      console.warn('The current browser does not support all of the features required to enable persistence');
+  initPromise = (async () => {
+    // Dynamic import so it catches the newly created json
+    const configSource = await import('../../firebase-applet-config.json');
+    const firebaseConfig = configSource.default;
+    
+    try {
+      const { getApp } = await import('firebase/app');
+      app = getApp();
+    } catch (e) {
+      app = initializeApp(firebaseConfig);
     }
-  }
+    
+    db = getFirestore(app, firebaseConfig.firestoreDatabaseId); 
+    
+    try {
+      await enableIndexedDbPersistence(db);
+    } catch (err: any) {
+      if (err.code == 'failed-precondition') {
+        console.warn('Multiple tabs open, persistence can only be enabled in one tab at a time.');
+      } else if (err.code == 'unimplemented') {
+        console.warn('The current browser does not support all of the features required to enable persistence');
+      }
+    }
+    
+    auth = getAuth(app);
+    
+    return { app, db, auth };
+  })();
   
-  auth = getAuth(app);
-  
-  return { app, db, auth };
+  return initPromise;
 };
 
 export const getDb = () => db;

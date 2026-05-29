@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getDb, getFirebaseAuth } from '../lib/firebase';
+import { initFirebase } from '../lib/firebase';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, getDocs } from 'firebase/firestore';
 import { Loader2, AlertCircle, CheckCircle2, BookOpen, MessageCircleQuestion, Plus, RefreshCcw, Edit, Trash2, Sparkles } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
@@ -48,11 +48,14 @@ export function News() {
   const isEditor = activeRole === 'editor';
 
   useEffect(() => {
-    let unsubscribe: () => void;
+    let unsubscribe: (() => void) | undefined;
+    let isMounted = true;
     
     const setupNews = async () => {
       try {
-        const db = getDb();
+        const { db } = await initFirebase();
+        if (!isMounted) return;
+        
         let newsQuery = query(collection(db, 'articles'));
         // If collaborator, only show published. If editor, show all (including drafts).
         if (!isEditor) {
@@ -60,6 +63,7 @@ export function News() {
         }
         
         unsubscribe = onSnapshot(newsQuery, (snap) => {
+          if (!isMounted) return;
           const uniqueTitles = new Set<string>();
           const data = snap.docs.reduce((acc, doc) => {
             const article = { 
@@ -79,17 +83,18 @@ export function News() {
             setLoading(false);
         }, (error) => {
           console.error("Error loading news", error);
-          setLoading(false);
+          if (isMounted) setLoading(false);
         });
       } catch (e) {
         console.error("Error setting up news", e);
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
     
     setupNews();
     
     return () => {
+      isMounted = false;
       if (unsubscribe) unsubscribe();
     };
   }, [isEditor]);
@@ -97,7 +102,7 @@ export function News() {
   const handleSyncNews = async () => {
     setSyncingNews(true);
     try {
-      const auth = getFirebaseAuth();
+      const { auth, db } = await initFirebase();
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
       
       const res = await fetch('/api/fetch-external-news', { 
@@ -110,7 +115,6 @@ export function News() {
       });
       const articles = await res.json();
       
-      const db = getDb();
       for (const article of articles) {
          await addDoc(collection(db, 'articles'), {
            title: article.title,
@@ -134,7 +138,7 @@ export function News() {
   const generateSummary = async () => {
     setLoadingSummary(true);
     try {
-      const db = getDb();
+      const { db, auth } = await initFirebase();
       const errSnap = await getDocs(collection(db, 'error_logs'));
       const errors = errSnap.docs.map(d => d.data().message || '');
       
@@ -146,7 +150,6 @@ export function News() {
 
       const allFeedbacks = [...errors, ...feeds];
       
-      const auth = getFirebaseAuth();
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
       
       const res = await fetch('/api/feedback-summary', {
@@ -199,7 +202,8 @@ export function News() {
   const handleDelete = async (id: string, e: React.MouseEvent) => {
      e.stopPropagation();
      try {
-       await deleteDoc(doc(getDb(), 'articles', id));
+       const { db } = await initFirebase();
+       await deleteDoc(doc(db, 'articles', id));
      } catch (e) {
        console.error("Delete error", e);
      }
@@ -209,8 +213,7 @@ export function News() {
     if (!title || !content) return;
     setSavingMsg('Salvando...');
     try {
-      const db = getDb();
-      const auth = getFirebaseAuth();
+      const { db, auth } = await initFirebase();
       
       let quizData = null;
       if (!isDraft && generateQuiz) {

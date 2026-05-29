@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getDb } from '../lib/firebase';
+import { initFirebase } from '../lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { Users, FileText, Gift, Award, TrendingUp } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -14,15 +14,18 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
     async function loadStats() {
       try {
-        const db = getDb();
+        const { db } = await initFirebase();
+        if (!isMounted) return;
         
         const [usersSnap, articlesSnap, benefitsSnap] = await Promise.all([
           getDocs(collection(db, 'users')),
           getDocs(collection(db, 'articles')),
           getDocs(collection(db, 'benefits'))
         ]);
+        if (!isMounted) return;
         
         const totalPoints = usersSnap.docs.reduce((acc, doc) => acc + (doc.data().points || 0), 0);
         
@@ -35,10 +38,13 @@ export function Dashboard() {
       } catch (e) {
         console.error("Dashboard error", e);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
     loadStats();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   return (

@@ -155,15 +155,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    let unsubscribe = () => {};
+    let unsubscribeAuth = () => {};
+    let unsubscribeDoc = () => {};
 
     initFirebase().then(({ auth, db }) => {
-      unsubscribe = onAuthStateChanged(auth, async (u) => {
+      unsubscribeAuth = onAuthStateChanged(auth, async (u) => {
         setUser(u);
+        unsubscribeDoc();
+        
         if (u) {
           try {
             const userRef = doc(db, 'users', u.uid);
-            const unsubscribeDoc = onSnapshot(userRef, async (userSnap) => {
+            unsubscribeDoc = onSnapshot(userRef, async (userSnap) => {
               let p: UserProfile;
               
               const isTargetEmail = u.email === 'hugo.yuri.77@gmail.com';
@@ -200,13 +203,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setActiveRole(p.role); // Default to their real role
             });
             
-            // Cleanup the doc listener when auth state changes or unmounts
-            const oldUnsubscribe = unsubscribe;
-            unsubscribe = () => {
-              oldUnsubscribe();
-              unsubscribeDoc();
-            };
-            
             const isTargetEmail = u.email === 'hugo.yuri.77@gmail.com';
             if (isTargetEmail) {
               await seedDatabase(db, u.uid);
@@ -222,7 +218,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      unsubscribeDoc();
+    };
   }, []);
 
   const loginWithGoogle = async () => {

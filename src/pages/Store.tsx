@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getDb, getFirebaseAuth } from '../lib/firebase';
+import { initFirebase } from '../lib/firebase';
 import { collection, doc, runTransaction, addDoc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
 import { Gift, Lock, Loader2, CheckCircle2, ShoppingBag, Plus, Edit, Trash2 } from 'lucide-react';
@@ -38,30 +38,34 @@ export function Store() {
   const [savingMsg, setSavingMsg] = useState('');
 
   useEffect(() => {
-    let unsubscribe: () => void;
+    let unsubscribe: (() => void) | undefined;
+    let isMounted = true;
     
     const setupBenefits = async () => {
       try {
-        const db = getDb();
+        const { db } = await initFirebase();
+        if (!isMounted) return;
+        
         unsubscribe = onSnapshot(collection(db, 'benefits'), (snap) => {
+          if (!isMounted) return;
           const uniqueMap = new Map<string, Benefit>();
           
           snap.docs.forEach(doc => {
             let b = { id: doc.id, ...doc.data() } as Benefit;
             
-            if (b.name.includes("Day Off Acadêmico") || b.name.includes("Day Off")) {
+            const bName = b.name || '';
+
+            if (bName.includes("Day Off Acadêmico") || bName.includes("Day Off")) {
               b.name = "Day Off";
               b.imageUrl = dayOffImage;
-            }
-            if (b.name.includes("Caneca")) {
+            } else if (bName.includes("Caneca")) {
               b.name = "Caneca FOLKS";
               b.imageUrl = folksMugImage;
-            }
-            if (b.name.includes("iFood")) {
+            } else if (bName.includes("iFood")) {
               b.imageUrl = ifoodVoucherImage;
             }
 
-            if (!uniqueMap.has(b.name)) {
+            if (b.name && !uniqueMap.has(b.name)) {
                uniqueMap.set(b.name, b);
             }
           });
@@ -72,17 +76,18 @@ export function Store() {
           setLoading(false);
         }, (error) => {
            console.error("Error loading benefits", error);
-           setLoading(false);
+           if (isMounted) setLoading(false);
         });
       } catch (e) {
         console.error("Error setting up benefits", e);
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
     
     setupBenefits();
     
     return () => {
+      isMounted = false;
       if (unsubscribe) unsubscribe();
     };
   }, []);
@@ -91,8 +96,7 @@ export function Store() {
     if ((profile?.points || 0) < b.cost) return;
     
     setPurchasing(b.id);
-    const auth = getFirebaseAuth();
-    const db = getDb();
+    const { auth, db } = await initFirebase();
     
     try {
       await runTransaction(db, async (t) => {
@@ -140,7 +144,8 @@ export function Store() {
   const handleDelete = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     try {
-      await deleteDoc(doc(getDb(), 'benefits', id));
+      const { db } = await initFirebase();
+      await deleteDoc(doc(db, 'benefits', id));
     } catch(e) {
       console.error(e);
     }
@@ -150,7 +155,7 @@ export function Store() {
     if(!name || cost <= 0) return;
     setSavingMsg('Salvando...');
     try {
-      const db = getDb();
+      const { db } = await initFirebase();
       const payload = { name, cost, stock, imageUrl };
       if (editingId) {
         await updateDoc(doc(db, 'benefits', editingId), payload);

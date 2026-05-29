@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, AlertTriangle, ShieldCheck, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { getDb, getFirebaseAuth } from '../lib/firebase';
+import { initFirebase } from '../lib/firebase';
 import { collection, addDoc } from 'firebase/firestore';
 
 export function Chat() {
@@ -20,8 +20,7 @@ export function Chat() {
 
   const recordError = async (message: string) => {
     try {
-      const db = getDb();
-      const auth = getFirebaseAuth();
+      const { db, auth } = await initFirebase();
       await addDoc(collection(db, 'error_logs'), {
         userId: auth?.currentUser?.uid || 'anonymous',
         message: message,
@@ -35,8 +34,7 @@ export function Chat() {
 
   const submitFeedback = async (msgIndex: number, isPositive: boolean) => {
     try {
-      const db = getDb();
-      const auth = getFirebaseAuth();
+      const { db, auth } = await initFirebase();
       const msg = messages[msgIndex];
       
       await addDoc(collection(db, 'feedbacks'), {
@@ -67,7 +65,7 @@ export function Chat() {
     setLoading(true);
 
     try {
-      const auth = getFirebaseAuth();
+      const { auth } = await initFirebase();
       const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
       
       const res = await fetch('/api/chat', {
